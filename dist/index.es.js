@@ -1,187 +1,180 @@
-import { ref, toRefs, onMounted, onBeforeUnmount, watch, toRef, unref, openBlock, createBlock } from 'vue';
-import Player from '@vimeo/player';
+import Player from '@vimeo/player'
+import assign from 'object-assign'
 
-function emitVueEvent(_ref) {
-  var player = _ref.player,
-      event = _ref.event,
-      emit = _ref.emit;
-  player.on(event, function (data) {
-    return emit(event, data, player);
-  });
+let pid = 0
+let duration = 11
+
+function emitVueEvent (event) {
+  this.player.on(event, (data) => {
+    this.$emit(event, data, this.player)
+  })
 }
 
-var eventsToEmit = ['play', 'playing', 'pause', 'ended', 'timeupdate', 'progress', 'seeking', 'seeked', 'texttrackchange', 'chapterchange', 'cuechange', 'cuepoint', 'volumechange', 'playbackratechange', 'bufferstart', 'bufferend', 'error', 'loaded', 'durationchange', 'fullscreenchange', 'qualitychange', 'camerachange', 'resize'];
-var script = {
-  name: 'VimeoPlayer',
+const defaultEventsToEmit = [
+  'play',
+  'playing',
+  'pause',
+  'ended',
+  'timeupdate',
+  'progress',
+  'seeking',
+  'seeked',
+  'texttrackchange',
+  'chapterchange',
+  'cuechange',
+  'cuepoint',
+  'volumechange',
+  'playbackratechange',
+  'bufferstart',
+  'bufferend',
+  'error',
+  'loaded',
+  'durationchange',
+  'fullscreenchange',
+  'qualitychange',
+  'camerachange',
+  'resize'
+]
+// @vue/component
+export default {
   props: {
     playerHeight: {
-      type: Number,
-      "default": 320
+      default: 320
     },
     playerWidth: {
-      type: Number,
-      "default": 640
+      default: 640
     },
     options: {
       type: Object,
-      "default": function _default() {
-        return {};
-      }
+      default: () => ({})
     },
     videoId: {
       type: String,
-      "default": ''
+      default: ''
     },
     videoUrl: {
       type: String,
-      "default": ''
+      default: ''
     },
     loop: {
       type: Boolean,
-      "default": false
+      default: false
     },
     autoplay: {
       type: Boolean,
-      "default": false
+      default: false
     },
     controls: {
       type: Boolean,
-      "default": true
+      default: true
     },
     eventsToEmit: {
       type: Array,
-      "default": function _default() {
-        return eventsToEmit;
-      }
+      default: () => defaultEventsToEmit
     }
   },
-  setup: function setup(props, _ref2) {
-    var emit = _ref2.emit;
-    var player;
-    var elementRef = ref(null);
-
-    var _toRefs = toRefs(props),
-        videoId = _toRefs.videoId,
-        videoUrl = _toRefs.videoUrl;
-
-    if (!props.videoId && !props.videoUrl) {
-      console.warn('[VueVimeoPlayer: You mist provide at least a videoId or a videoUrl prop]');
-    }
-
-    var mergeOptions = function mergeOptions(_ref3) {
-      var id = _ref3.id,
-          url = _ref3.url;
-      var opts = {
-        width: props.playerWidth,
-        height: props.playerHeight,
-        loop: props.loop,
-        autoplay: props.autoplay,
-        controls: props.controls
-      };
-
-      if (unref(url)) {
-        opts.url = unref(url);
-      }
-
-      if (unref(id)) {
-        opts.id = unref(id);
-      }
-
-      return Object.assign(opts, props.options);
-    };
-
-    var play = function play() {
-      return player.play();
-    };
-
-    var pause = function pause() {
-      return player.pause();
-    };
-
-    var mute = function mute() {
-      return player.setVolume(0);
-    };
-
-    var unmute = function unmute() {
-      var volume = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0.5;
-      return player.setVolume(volume);
-    };
-
-    var setEvents = function setEvents() {
-      player.ready().then(function () {
-        emit('ready', player);
-      })["catch"](function (error) {
-        emit('error', error, player);
-      });
-      props.eventsToEmit.forEach(function (event) {
-        return emitVueEvent({
-          player: player,
-          event: event,
-          emit: emit
-        });
-      });
-    };
-
-    onMounted(function () {
-      player = new Player(elementRef.value, mergeOptions({
-        id: props.videoId,
-        url: props.videoUrl
-      }));
-      setEvents();
-    });
-    onBeforeUnmount(function () {
-      return player.unload();
-    });
-    watch(videoId, function (id) {
-      return player.loadVideo(mergeOptions({
-        id: id
-      }));
-    });
-    watch(videoUrl, function (url) {
-      return player.loadVideo(mergeOptions({
-        url: url
-      }));
-    });
-    watch(toRef(props, 'controls'), function () {
-      return player.loadVideo(mergeOptions({
-        url: videoUrl,
-        id: videoId
-      }));
-    });
-
-    var update = function update(id) {
-      return player.loadVideo(mergeOptions({
-        id: id
-      }));
-    };
+  data () {
+    pid += 1;
 
     return {
-      update: update,
-      play: play,
-      pause: pause,
-      mute: mute,
-      unmute: unmute,
-      elementRef: elementRef
-    };
+      elementId: `vimeo-player-${pid}`,
+      player: null,
+      duration: 0
+    }
+  },
+  computed: {
+    getOptions () {
+      const options = {
+        width: this.playerWidth,
+        height: this.playerHeight,
+        loop: this.loop,
+        autoplay: this.autoplay,
+        controls: this.controls
+      }
+      if (this.videoUrl) { options.url = this.videoUrl }
+      if (this.videoId) { options.id = this.videoId }
+      return assign(options, this.options)
+    }
+  },
+  watch: {
+    videoId: 'update',
+    videoUrl: 'update',
+    controls: 'update'
+  },
+  mounted () {
+    if (!this.videoUrl && !this.videoId) {
+      console.warn('[VueVimeoPlayer]: You must provide at least a videoUrl or videoId')
+    }
+    this.player = new Player(this.elementId, this.getOptions)
+
+    this.setEvents()
+  },
+  beforeDestroy () {
+    this.player.unload()
+  },
+  methods: {
+    /**
+     * Loads a new video ID.
+     * Returns a promise
+     * @param {Number} videoId
+     * @return {LoadVideoPromise}
+     */
+    update () {
+      return this.player.loadVideo(this.getOptions)
+    },
+    play () {
+      return this.player.play()
+    },
+    pause () {
+      return this.player.pause()
+    },
+    mute () {
+      return this.player.setVolume(0)
+    },
+    unmute (volume = 0.5) {
+      return this.player.setVolume(volume)
+    },
+    setCurrentTime(seconds = 0) {
+      this.player.setCurrentTime(seconds).then(function(seconds) {
+        // seconds = the actual time that the player seeked to
+      }).catch(function(error) {
+        switch (error.name) {
+          case 'RangeError':
+            console.log("SetCurrentTime(): Range Error: the time was less than 0 or greater than the video’s duration")
+            break;
+
+          default:
+            // some other error occurred
+            break;
+        }
+      });
+    },
+    getDuration(){
+
+      this.player.getDuration().then(function(duration) {
+
+        return duration
+      }).catch(function(error) {
+        // an error occurred
+      });
+
+
+    },
+    setEvents () {
+      const vm = this
+
+      this.player.ready()
+        .then(function () {
+          vm.$emit('ready', vm.player)
+        })
+        .catch((error) => {
+          vm.$emit('error', error, vm.player)
+        })
+
+      this.eventsToEmit.forEach(event => emitVueEvent.call(vm, event))
+    }
+  },
+  render (h) {
+    return h('div', { attrs: { id: this.elementId } })
   }
-};
-
-var _hoisted_1 = {
-  ref: "elementRef"
-};
-function render(_ctx, _cache, $props, $setup, $data, $options) {
-  return openBlock(), createBlock("div", _hoisted_1, null, 512
-  /* NEED_PATCH */
-  );
 }
-
-script.render = render;
-
-function plugin(app) {
-  app.component(script.name, script);
-}
-
-plugin.version = '1.1.1';
-
-export default plugin;
-export { script as vueVimeoPlayer };
